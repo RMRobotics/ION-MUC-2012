@@ -12,7 +12,7 @@
 //                                                        //
 //            RICHARD MONTGOMERY ROBOTICS TEAM            //
 //                                                        //
-//       CODE FOR THE 2011 ION MINI URBAN CHALLENGE       //
+//       CODE FOR THE 2012 ION MINI URBAN CHALLENGE       //
 // PRIMARY VERSION FOR WASHINGTON DC REGIONAL COMPETITION //
 //                                                        //
 ////////////////////////////////////////////////////////////
@@ -26,8 +26,6 @@
 #define LOW 20 //40 // Speed to use in yellow-bordered zones, parking lots, and intersections
 #define SENSITIVITY 80 // Strength of steering reactions while driving
 #define DECAY 1.5 // Strength of steering's tendancy towards steering straight
-#define LEFTTURN 150 // Length of a 90-degree counterclockwise turn
-#define RIGHTTURN 140 // Length of a 90-degree clockwise turn
 
 #define BLACK 0
 #define WHITE 1
@@ -35,6 +33,10 @@
 #define BLUE 3
 #define YELLOW 4
 #define GREEN 5
+
+#define LEFT 0
+#define RIGHT 1
+#define FORWARD 2
 
 // ==================================================
 // ==================================================
@@ -63,16 +65,15 @@ task main()
   color(1);
   wait1Msec(1000);
 
-  /*drive(0, 0);
-  turn(0);
-  drive(0, 1);
-  park(0, 0);
-  */
+  //Subroutine Parameters
+  //  drive(side, destination)
+  //  turn(direction)
+  //  park(side, space)
 
-  drive(1, 0);
-  turn(1);
-  drive(1,1);
-  park(1, 0);
+  /*drive(LEFT, 0);
+  turn(LEFT);
+  drive(LEFT, 1);*/
+  park(LEFT, 2);
 
   wait1Msec(5000); //finish
 }
@@ -105,10 +106,6 @@ void drive(int side, int destination)
   int speed = LOW;
   int stopping = 0;
 
-//  while((destination != 0 || lastColor != WHITE || otherColor != WHITE) &&
-//        (destination != 1 || lastColor != 3) &&
-//        (destination != 2 || stopping != 1)) // If destination == 0, this loops until red is seen, if destination == 1, blue.
-//  {
   while (true)
   {
     // @JON
@@ -159,7 +156,6 @@ void drive(int side, int destination)
         speed = HIGH; //go fast if you see white
       }
     }
-    //nxtDisplayCenteredBigTextLine(4, "%3.0f", steering);
 
     if (steering > 0)
     {
@@ -188,12 +184,18 @@ void drive(int side, int destination)
   {
     nxtDisplayCenteredBigTextLine(4, "STOPPED");
     wait1Msec(2000); //stay at a complete stop for two seconds
+    ClearTimer(T1);
     while(SensorValue(colorBack) != REDCOLOR)
     {
       move(10);
+      if(time1[T1] >= 5000)
+      {
+        PlayTone(220, 1);
+        break;
+      }
     }
   }
-  else if (destination != 3) //if stopped at a parking lot, continue moving forward a certain distance.
+  else if (destination != 3 && destination != 4) //if stopped at a parking lot, continue moving forward a certain distance.
   {
     nxtDisplayCenteredBigTextLine(5, "TO PARKING");
     for(int counter = 0; counter < 500; counter++) //For a certain distance
@@ -257,7 +259,7 @@ void turn(int direction)
   }
   else
   {
-    move(100); //Leave the intersection
+    move(100);
   }
 }
 
@@ -275,11 +277,6 @@ void park(int side, int space)
 
   nxtDisplayCenteredBigTextLine(4, "Entering Lot");
 
-  //pivot(side); //turn to face the lot
-  //align(); //align against the outer edge of the lot
-  //move(500); //enter the lot
-  //align(); //align against the inner edge of the lot
-
   if(space != 0)
   {
     for(int i = 0; i < space; i++)
@@ -291,10 +288,15 @@ void park(int side, int space)
   else
     master = motorC;
   motor[master] = LOW/2;
-
+  ClearTimer(T1);
   while(color(side) != WHITE)
   {
     //Loop until color sensor detects white
+    if(time1[T1] >= 5000)
+    {
+      PlayTone(220, 1);
+      break;
+    }
   }
   motor[master] = 0;
 
@@ -312,9 +314,15 @@ void park(int side, int space)
   nSyncedTurnRatio = 100;
   motor[motorB] = -LOW;
   wait1Msec(500);
+  ClearTimer(T1);
   while(SensorValue(colorBack)!= WHITECOLOR && SensorValue(colorBack) != BLUECOLOR)
   {
-    motor[motorB] = -LOW; //exit the lot
+    //exit the lot
+    if(time1[T1] >= 5000)
+    {
+      PlayTone(220, 1);
+      break;
+    }
   }
   motor[motorB] = 0;
   nSyncedMotors = synchNone;
@@ -420,44 +428,30 @@ void move(int distance)
 void pivot(int direction)
 {
   tMotor master;
-  //tSensors side;
-  //bool Black;
+
   if (direction == 0)
   {
     master = motorB;
-    //nSyncedMotors = synchBC; //motor B is the master, motor C is the slave
-    nMotorEncoder[motorB] = 0;  //clear the motor encoders
-    //nMotorEncoderTarget[motorB] = LEFTTURN; //set the target stopping position
-    //side = colorLeft;
   }
   else
   {
     master = motorC;
-    //nSyncedMotors = synchCB; //motor C is the master, motor B is the slave
-    nMotorEncoder[motorC] = 0;  //clear the motor encoders
-    //nMotorEncoderTarget[motorC] = RIGHTTURN; //set the target stopping position
-    //side = colorRight;
   }
-  //nSyncedTurnRatio = -100; //motors move in opposite directions of each other
 
   motor[master] = LOW/2; //turn both motors on
 
+  ClearTimer(T1);
   while (color(direction) == 0)  // @JON - Consider adding auto stop if black is not seen after seconds or minutes.
   {
     // Loop until color sensor doesn't see black
-    //if robot doesn't see black after motor turns 300 encoder clicks, stop moving and play tone
-    if(nMotorEncoder[master] >= 300)
+    if(time1[T1] >= 5000)
     {
-      motor[master] = 0;
-      while(true)
-      {
-        PlayTone(1, 220);
-      }
+      PlayTone(220, 1);
+      break;
     }
   }
 
   motor[master] = 0; //turn both motors off
-
   nSyncedMotors = synchNone; //unsync the motors so they are free to move independantly
 
   wait1Msec(1); //I don't know why this is necessary, but puting this here has caused some inexplicable errors to magically dissapear!
