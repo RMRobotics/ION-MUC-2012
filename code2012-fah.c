@@ -46,6 +46,7 @@
 void drive(int side, int destination);
 void turn(int direction);
 void park(int side, int space);
+void unpark(int side, bool special);
 int color(int side);
 void move(int distance);
 void pivot(int direction);
@@ -69,11 +70,11 @@ task main()
   //  drive(side, destination)
   //  turn(direction)
   //  park(side, space)
+  //  unpark(side, special)
 
-  /*drive(LEFT, 0);
-  turn(LEFT);
-  drive(LEFT, 1);*/
-  park(LEFT, 2);
+  unpark(LEFT, true);
+  turn(RIGHT);
+  drive(LEFT, 0);
 
   wait1Msec(5000); //finish
 }
@@ -102,19 +103,18 @@ void drive(int side, int destination)
   float steering = 0;
   int adjustment = SENSITIVITY * (2 * side -1);
   int lastColor = color(side);
-  int otherColor = color((side + 1) % 2);
+  //int otherColor = color((side + 1) % 2);
   int speed = LOW;
-  int stopping = 0;
 
   while (true)
   {
     // @JON
     if ((destination == 0 /* stop sign */ && lastColor == RED ) ||
-       (destination == 1 /* parking lot */  && lastColor == BLUE) ||
-       (destination == 3 /* back of parking lot */ && SensorValue(colorBack) == BLUECOLOR) ||
-       (destination == 4 /* side of parking lot */ && lastColor == WHITE) ||
-       (destination == 2 /* special case */ && stopping == 1 /* final parking square */ ))
-      break;
+      (destination == 1 /* parking lot */  && lastColor == BLUE) ||
+    (destination == 3 /* back of parking lot */ && (color(2) == BLUE || color(2) == RED)) ||
+    (destination == 4 /* side of parking lot */ && lastColor == WHITE) ||
+    (destination == 2 /* special case */ && lastColor == RED /* final parking square */ ))
+    break;
     // END @JON
 
     steering = steering/DECAY;
@@ -122,32 +122,26 @@ void drive(int side, int destination)
     if(destination == 4)
     {
       lastColor = color((side+1) % 2);
-      otherColor = color(side);
+      //otherColor = color(side);
     }
     else
     {
       lastColor = color(side);
-      otherColor = color((side + 1) % 2);
+      //otherColor = color((side + 1) % 2);
     }
 
-    if (lastColor == RED)
-    {
-      stopping++;
-      nxtDisplayCenteredBigTextLine(4, "%2i", stopping);
-    }
     if (lastColor == BLACK || (destination == 2 && lastColor == BLUE))
     {
       steering = steering + adjustment/speed; //steer outwards
     }
     else
     {
-      stopping--;
       steering = steering - adjustment/speed; //steering inwards
-      if (lastColor == RED || otherColor == RED)
+      /*if (lastColor == RED || otherColor == RED)
       {
-        speed = LOW/4; //go extra slow if any red has been seen
+      speed = LOW/4; //go extra slow if any red has been seen
       }
-      else if (lastColor == YELLOW || (destination == 3 && lastColor == WHITE))
+      else */if (lastColor == YELLOW || (destination == 3 && lastColor == WHITE))
       {
         speed = LOW; //go slow if you see yellow or are in the parking lot
       }
@@ -185,7 +179,7 @@ void drive(int side, int destination)
     nxtDisplayCenteredBigTextLine(4, "STOPPED");
     wait1Msec(2000); //stay at a complete stop for two seconds
     ClearTimer(T1);
-    while(SensorValue(colorBack) != REDCOLOR)
+    while(color(2) != RED)
     {
       move(10);
       if(time1[T1] >= 5000)
@@ -195,14 +189,18 @@ void drive(int side, int destination)
       }
     }
   }
-  else if (destination != 3 && destination != 4) //if stopped at a parking lot, continue moving forward a certain distance.
+  else if (destination != 3) //if stopped at a parking lot, continue moving forward a certain distance.
   {
     nxtDisplayCenteredBigTextLine(5, "TO PARKING");
-    for(int counter = 0; counter < 500; counter++) //For a certain distance
+    for(int counter = 0; counter < 450; counter++) //For a certain distance
     {
       steering = steering/DECAY;
 
-      lastColor = color(side);
+      if(destination == 4)
+        lastColor = color((side+1)%2);
+      else
+        lastColor = color(side);
+
       if (lastColor == BLACK)
       {
         steering = steering + adjustment/LOW;
@@ -275,19 +273,20 @@ void park(int side, int space)
 {
   tMotor master;
 
-  nxtDisplayCenteredBigTextLine(4, "Entering Lot");
-
   if(space != 0)
   {
     for(int i = 0; i < space; i++)
       drive((side+1)%2, 4); //tell robot to follow Side A of road, but will actually follow the outside of Side B
   }
 
+  nxtDisplayCenteredBigTextLine(4, "Entering Lot");
+
   if(side == 0)
     master = motorB;
   else
     master = motorC;
   motor[master] = LOW/2;
+  wait1Msec(1000);
   ClearTimer(T1);
   while(color(side) != WHITE)
   {
@@ -306,7 +305,10 @@ void park(int side, int space)
 
   nxtDisplayCenteredBigTextLine(4, "PARKED");
   wait1Msec(5000); //remain parked for five seconds
+}
 
+void unpark(int side, bool special)
+{
   nxtDisplayCenteredBigTextLine(4, "Leaving Lot");
   //Unpark
 
@@ -315,7 +317,7 @@ void park(int side, int space)
   motor[motorB] = -LOW;
   wait1Msec(500);
   ClearTimer(T1);
-  while(SensorValue(colorBack)!= WHITECOLOR && SensorValue(colorBack) != BLUECOLOR)
+  while(color(2) == BLACK)
   {
     //exit the lot
     if(time1[T1] >= 5000)
@@ -328,10 +330,47 @@ void park(int side, int space)
   nSyncedMotors = synchNone;
 
   nxtDisplayCenteredBigTextLine(4, ""); //Clear
+  if(special == false)
+  {
+    turn((side+1)%2);
+    drive((side+1)%2, 0);
+  }
+  else
+  {
+    turn(side);
 
-  turn((side+1)%2);
-  drive((side+1)%2, 0);
+    nSyncedMotors = synchBC;
+    nSyncedTurnRatio = 100;
+    motor[motorB] = -LOW;
+    ClearTimer(T1);
+    while(color(2) == BLACK)
+      {
+      //exit the lot
+      if(time1[T1] >= 5000)
+      {
+        PlayTone(220, 1);
+        break;
+      }
+    }
+    motor[motorB] = 0;
+    wait1Msec(2000);
+    motor[motorB] = -LOW;
+    wait1Msec(500);
 
+    motor[motorB] = -LOW;
+    ClearTimer(T1);
+    while(color(0) != RED && color(1) != RED)
+      {
+      //exit the lot
+      if(time1[T1] >= 5000)
+      {
+        PlayTone(220, 1);
+        break;
+      }
+    }
+    motor[motorB] = 0;
+    nSyncedMotors = synchNone;
+  }
 }
 
 // ++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -346,7 +385,7 @@ void park(int side, int space)
 // COLOR
 // Returns the color under the sensor indicated (0: black or error, 1: white, 2: red, 3: blue, 4: yellow, 5: green)
 // Arguments:
-//   side which side color sensor to query (0: left, 1: right)
+//   side which side color sensor to query (0: left, 1: right, 2: back)
 
 int color(int side)
 {
@@ -355,9 +394,13 @@ int color(int side)
   {
     colorSensor = colorLeft;
   }
-  else
+  else if (side == 1)
   {
     colorSensor = colorRight;
+  }
+  else
+  {
+    colorSensor = colorBack;
   }
 
   if (!validColorSensor(colorSensor))
@@ -378,14 +421,14 @@ int color(int side)
 
   switch (currentColor)
   {
-    case BLACKCOLOR: nxtDisplayCenteredBigTextLine(side*2, "Black"); return BLACK;
-    case REDCOLOR: nxtDisplayCenteredBigTextLine(side*2, "Red"); return RED;
-    case GREENCOLOR: nxtDisplayCenteredBigTextLine(side*2, "Green"); return GREEN;
-    case WHITECOLOR: nxtDisplayCenteredBigTextLine(side*2, "White"); return WHITE;
-    case YELLOWCOLOR: nxtDisplayCenteredBigTextLine(side*2, "Yellow"); return YELLOW;
-    case BLUECOLOR: nxtDisplayCenteredBigTextLine(side*2, "Blue"); return BLUE;
-    default: nxtDisplayCenteredBigTextLine(side*2, "Bad Type"); return 0;
-	}
+  case BLACKCOLOR: nxtDisplayCenteredBigTextLine(side*2, "Black"); return BLACK;
+  case REDCOLOR: nxtDisplayCenteredBigTextLine(side*2, "Red"); return RED;
+  case GREENCOLOR: nxtDisplayCenteredBigTextLine(side*2, "Green"); return GREEN;
+  case WHITECOLOR: nxtDisplayCenteredBigTextLine(side*2, "White"); return WHITE;
+  case YELLOWCOLOR: nxtDisplayCenteredBigTextLine(side*2, "Yellow"); return YELLOW;
+  case BLUECOLOR: nxtDisplayCenteredBigTextLine(side*2, "Blue"); return BLUE;
+  default: nxtDisplayCenteredBigTextLine(side*2, "Bad Type"); return 0;
+  }
 }
 
 // ++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -439,6 +482,7 @@ void pivot(int direction)
   }
 
   motor[master] = LOW/2; //turn both motors on
+  wait1Msec(1000);
 
   ClearTimer(T1);
   while (color(direction) == 0)  // @JON - Consider adding auto stop if black is not seen after seconds or minutes.
