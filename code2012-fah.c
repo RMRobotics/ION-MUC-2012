@@ -72,9 +72,12 @@ task main()
   //  park(side, space)
   //  unpark(side, special)
 
-  unpark(LEFT, true);
-  turn(RIGHT);
   drive(LEFT, 0);
+  turn(LEFT);
+  drive(LEFT, 1);
+  park(LEFT, 1);
+  unpark(LEFT, true);
+  //align();
 
   wait1Msec(5000); //finish
 }
@@ -103,13 +106,13 @@ void drive(int side, int destination)
   float steering = 0;
   int adjustment = SENSITIVITY * (2 * side -1);
   int lastColor = color(side);
-  //int otherColor = color((side + 1) % 2);
+  int otherColor = color((side + 1) % 2);
   int speed = LOW;
 
   while (true)
   {
     // @JON
-    if ((destination == 0 /* stop sign */ && lastColor == RED ) ||
+    if ((destination == 0 /* stop sign */ && otherColor == RED ) ||
       (destination == 1 /* parking lot */  && lastColor == BLUE) ||
     (destination == 3 /* back of parking lot */ && (color(2) == BLUE || color(2) == RED)) ||
     (destination == 4 /* side of parking lot */ && lastColor == WHITE) ||
@@ -122,12 +125,12 @@ void drive(int side, int destination)
     if(destination == 4)
     {
       lastColor = color((side+1) % 2);
-      //otherColor = color(side);
+      otherColor = color(side);
     }
     else
     {
       lastColor = color(side);
-      //otherColor = color((side + 1) % 2);
+      otherColor = color((side + 1) % 2);
     }
 
     if (lastColor == BLACK || (destination == 2 && lastColor == BLUE))
@@ -170,71 +173,74 @@ void drive(int side, int destination)
   }
   motor[master] = 0; //stop
 
-  nSyncedMotors = synchNone; //unsync motors
-
   //wait1Msec(1000);
 
   if (destination == 0) // if stopped at a stop sign
   {
     nxtDisplayCenteredBigTextLine(4, "STOPPED");
     wait1Msec(2000); //stay at a complete stop for two seconds
+    motor[master] = LOW;
     ClearTimer(T1);
     while(color(2) != RED)
     {
-      move(10);
       if(time1[T1] >= 5000)
       {
         PlayTone(220, 1);
         break;
       }
     }
+    motor[master] = 0;
   }
-  else if (destination != 3) //if stopped at a parking lot, continue moving forward a certain distance.
+
+  nSyncedMotors = synchNone; //unsync motors
+
+  /*else if (destination != 3) //if stopped at a parking lot, continue moving forward a certain distance.
   {
-    nxtDisplayCenteredBigTextLine(5, "TO PARKING");
-    for(int counter = 0; counter < 450; counter++) //For a certain distance
-    {
-      steering = steering/DECAY;
+  nxtDisplayCenteredBigTextLine(5, "TO PARKING");
+  for(int counter = 0; counter < 450; counter++) //For a certain distance
+  {
+  steering = steering/DECAY;
 
-      if(destination == 4)
-        lastColor = color((side+1)%2);
-      else
-        lastColor = color(side);
+  if(destination == 4)
+  lastColor = color((side+1)%2);
+  else
+  lastColor = color(side);
 
-      if (lastColor == BLACK)
-      {
-        steering = steering + adjustment/LOW;
-      }
-      else
-      {
-        steering = steering - adjustment/LOW;
-      }
-      nxtDisplayCenteredBigTextLine(4, "%3.0f", steering);
+  if (lastColor == BLACK)
+  {
+  steering = steering + adjustment/LOW;
+  }
+  else
+  {
+  steering = steering - adjustment/LOW;
+  }
+  nxtDisplayCenteredBigTextLine(4, "%3.0f", steering);
 
-      if (steering > 0)
-      {
-        master = motorC;
-        nSyncedMotors = synchCB; //motor C is the master, motor B is the slave
-      }
-      else
-      {
-        master = motorB;
-        nSyncedMotors = synchBC; //motor B is the master, motor C is the slave
-      }
+  if (steering > 0)
+  {
+  master = motorC;
+  nSyncedMotors = synchCB; //motor C is the master, motor B is the slave
+  }
+  else
+  {
+  master = motorB;
+  nSyncedMotors = synchBC; //motor B is the master, motor C is the slave
+  }
 
-      nSyncedTurnRatio = 100 - abs(steering); //set the relative motor speeds
+  nSyncedTurnRatio = 100 - abs(steering); //set the relative motor speeds
 
-      motor[master] = LOW;
+  motor[master] = LOW;
 
-      wait1Msec(5);
-    }
-    motor[master] = 0; // stop moving
+  wait1Msec(5);
+  }
+  motor[master] = 0; // stop moving
 
-    nSyncedMotors = synchNone; // clear syncronization
+  nSyncedMotors = synchNone; // clear syncronization
 
-    nxtDisplayCenteredBigTextLine(5, ""); //Clear line
+  nxtDisplayCenteredBigTextLine(5, ""); //Clear line
   }
   nxtDisplayCenteredBigTextLine(4, ""); //Clear line
+  */
 }
 
 // ++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -273,10 +279,10 @@ void park(int side, int space)
 {
   tMotor master;
 
-  if(space != 0)
-  {
-    for(int i = 0; i < space; i++)
-      drive((side+1)%2, 4); //tell robot to follow Side A of road, but will actually follow the outside of Side B
+  for(int i = 0; i <= space; i++){
+    drive((side+1)%2, 4); //tell robot to follow Side A of road, but will actually follow the outside of Side B
+    if(i < space)
+      move(100); //tinker with this value until it works (basically, we need to get the robot off the white line so that it doesn't detect 1 white line twice)
   }
 
   nxtDisplayCenteredBigTextLine(4, "Entering Lot");
@@ -344,7 +350,7 @@ void unpark(int side, bool special)
     motor[motorB] = -LOW;
     ClearTimer(T1);
     while(color(2) == BLACK)
-      {
+    {
       //exit the lot
       if(time1[T1] >= 5000)
       {
@@ -360,7 +366,7 @@ void unpark(int side, bool special)
     motor[motorB] = -LOW;
     ClearTimer(T1);
     while(color(0) != RED && color(1) != RED)
-      {
+    {
       //exit the lot
       if(time1[T1] >= 5000)
       {
